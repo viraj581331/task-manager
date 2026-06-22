@@ -2,6 +2,12 @@ from fastapi import FastAPI, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from database import get_db
+import models
+from database import engine
+
+# This line tells SQLAlchemy to create all tables defined in models.py if they don't exist yet
+models.Base.metadata.create_all(bind=engine)
+
 
 app = FastAPI(title="Task Manager API")
 
