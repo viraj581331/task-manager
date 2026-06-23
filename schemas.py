@@ -1,5 +1,12 @@
 from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
+from enum import Enum
+
+# Define strict, acceptable choices for task status
+class TaskStatus(str, Enum):
+    pending = "pending"
+    in_progress = "in_progress"
+    completed = "completed"
 
 # Shared properties for creating a user or returning user info
 class UserBase(BaseModel):
@@ -24,9 +31,11 @@ class Token(BaseModel):
 
 # Shared base properties for tasks
 class TaskBase(BaseModel):
+    # Ensure title cannot be empty spaces
     title: str = Field(..., min_length=1, max_length=255)
     description: str | None = None
-    status: str = Field("pending", max_length=50)
+    # Strictly validate status against our Enum options
+    status: TaskStatus = TaskStatus.pending
     due_date: datetime | None = None
 
 # Fields required to create a new task
@@ -37,7 +46,7 @@ class TaskCreate(TaskBase):
 class TaskUpdate(BaseModel):
     title: str | None = Field(None, min_length=1, max_length=255)
     description: str | None = None
-    status: str | None = Field(None, max_length=50)
+    status: TaskStatus | None = None  # Validates choices during updates
     due_date: datetime | None = None
 
 # Structure of the response returned to the client
@@ -49,3 +58,5 @@ class TaskResponse(TaskBase):
 
     class Config:
         from_attributes = True
+
+
