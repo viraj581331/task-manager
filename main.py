@@ -73,3 +73,46 @@ def login_user(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = D
 
     access_token = auth.create_access_token(data={"sub": str(user.user_id)})
     return {"access_token": access_token, "token_type": "bearer"}
+
+# --- CRUD: CREATE A TASK ---
+@app.post("/tasks", response_model=schemas.TaskResponse, status_code=status.HTTP_201_CREATED)
+def create_task(task: schemas.TaskCreate, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    # Convert Pydantic data schema into SQLAlchemy database model instance
+    new_task = models.Task(**task.dict(), user_id=current_user.user_id)
+    db.add(new_task)
+    db.commit()
+    db.refresh(new_task)
+    return new_task
+
+# --- CRUD: READ ALL TASKS FOR THE LOGGED-IN USER ---
+@app.get("/tasks", response_model=list[schemas.TaskResponse])
+def get_tasks(db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    # This filter guarantees User A can NEVER view or access User B's entries
+    tasks = db.query(models.Task).filter(models.Task.user_id == current_user.user_id).all()
+    return tasks
+
+# --- CRUD: UPDATE AN EXISTING TASK ---
+@app.put("/tasks/{task_id}", response_model=schemas.TaskResponse)
+def update_task(task_id: int, task_update: schemas.TaskUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    db_task = db.query(models.Task).filter(models.Task.task_id == task_id, models.Task.user_id == current_user.user_id).first()
+    if not db_task:
+        raise HTTPException(status_code=404, detail="Task not found or unauthorized")
+        
+    # Apply only the parameters explicitly sent inside the request body
+    for key, value in task_update.dict(exclude_unset=True).items():
+        setattr(db_task, key, value)
+        
+    db.commit()
+    db.refresh(db_task)
+    return db_task
+
+# --- CRUD: DELETE A TASK ---
+@app.delete("/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_task(task_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    db_task = db.query(models.Task).filter(models.Task.task_id == task_id, models.Task.user_id == current_user.user_id).first()
+    if not db_task:
+        raise HTTPException(status_code=404, detail="Task not found or unauthorized")
+        
+    db.delete(db_task)
+    db.commit()
+    return None
