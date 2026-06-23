@@ -77,8 +77,8 @@ def login_user(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = D
 # --- CRUD: CREATE A TASK ---
 @app.post("/tasks", response_model=schemas.TaskResponse, status_code=status.HTTP_201_CREATED)
 def create_task(task: schemas.TaskCreate, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
-    # Convert Pydantic data schema into SQLAlchemy database model instance
-    new_task = models.Task(**task.dict(), user_id=current_user.user_id)
+    # UPDATED: Changed .dict() to .model_dump()
+    new_task = models.Task(**task.model_dump(), user_id=current_user.user_id)
     db.add(new_task)
     db.commit()
     db.refresh(new_task)
@@ -87,7 +87,6 @@ def create_task(task: schemas.TaskCreate, db: Session = Depends(get_db), current
 # --- CRUD: READ ALL TASKS FOR THE LOGGED-IN USER ---
 @app.get("/tasks", response_model=list[schemas.TaskResponse])
 def get_tasks(db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
-    # This filter guarantees User A can NEVER view or access User B's entries
     tasks = db.query(models.Task).filter(models.Task.user_id == current_user.user_id).all()
     return tasks
 
@@ -98,8 +97,9 @@ def update_task(task_id: int, task_update: schemas.TaskUpdate, db: Session = Dep
     if not db_task:
         raise HTTPException(status_code=404, detail="Task not found or unauthorized")
         
-    # Apply only the parameters explicitly sent inside the request body
-    for key, value in task_update.dict(exclude_unset=True).items():
+    # UPDATED: Changed .dict(exclude_unset=True) to .model_dump(exclude_unset=True)
+    update_data = task_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
         setattr(db_task, key, value)
         
     db.commit()
@@ -116,3 +116,4 @@ def delete_task(task_id: int, db: Session = Depends(get_db), current_user: model
     db.delete(db_task)
     db.commit()
     return None
+

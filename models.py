@@ -1,5 +1,6 @@
 from sqlalchemy import Column, Integer, String, TEXT, DATETIME, TIMESTAMP, ForeignKey, text
 from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
 from database import Base
 
 class User(Base):
@@ -36,12 +37,12 @@ class Task(Base):
     # created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     created_at = Column(TIMESTAMP, nullable=False, server_default=text("CURRENT_TIMESTAMP"))
     
-    # updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    # UPDATED LINE: Uses Python-side triggers to fire on every update statement
     updated_at = Column(
         TIMESTAMP, 
         nullable=False, 
         server_default=text("CURRENT_TIMESTAMP"), 
-        server_onupdate=text("CURRENT_TIMESTAMP")
+        onupdate=func.now()  # Tells SQLAlchemy to explicitly send the update time
     )
     
     # user_id INT FOREIGN KEY NOT NULL (WITH CASCADE ON DELETE)
