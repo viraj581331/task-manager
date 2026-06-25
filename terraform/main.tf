@@ -188,3 +188,77 @@ resource "aws_db_instance" "mysql" {
     Name = "${var.project_name}-mysql-rds"
   }
 }
+
+# ==========================================
+# 10. AMAZON ECR (Private Docker Repository)
+# ==========================================
+resource "aws_ecr_repository" "app" {
+  name                 = "${var.project_name}-backend"
+  image_tag_mutability = "MUTABLE"
+  image_scanning_configuration {
+    scan_on_push = true # Automatically scans container for vulnerabilities on push
+  }
+}
+
+# ==========================================
+# 11. AMAZON ECS FARGATE CLUSTER CORE
+# ==========================================
+resource "aws_ecs_cluster" "main" {
+  name = "${var.project_name}-ecs-cluster"
+}
+
+# IAM Execution Role enabling ECS to pull images from ECR and stream logs
+resource "aws_iam_role" "ecs_execution" {
+  name = "${var.project_name}-ecs-execution-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = { Service = "://amazonaws.com" }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_execution" {
+  role       = aws_iam_role.ecs_execution.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
+# Definition blueprint tracking how the container should spin up
+resource "aws_ecs_task_definition" "app" {
+  family                   = "${var.project_name}-task"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = "256" # 0.25 vCPU (Free Tier Friendly)
+  memory                   = "512" # 512 MB RAM
+
+  execution_role_arn = aws_iam_role.ecs_execution.arn
+
+  container_definitions = jsonencode([{
+    name      = "${var.project_name}-container"
+    image     = "${aws_ecr_repository.app.repository_url}:latest"
+    essential = true
+    portMappings = [{
+      containerPort = 8000
+      hostPort      = 8000
+    }]
+    # In Phase 3, we will bind your Cloud RDS environment URLs into this container map block dynamically!
+  }])
+}
+
+# The long-running ECS Service that keeps our container healthy and active
+resource "aws_ecs_service" "app" {
+  name            = "${var.project_name}-service"
+  cluster         = aws_ecs_cluster.main.id
+  task_definition = aws_ecs_task_definition.app.arn
+  desired_count   = 1
+  launch_type     = "FARGATE"
+
+  network_configuration {
+    subnets          = aws_subnet.private[*].id # Placed safely inside our dark private subnets
+    security_groups  = [aws_security_group.ecs_tasks.id]
+    assign_public_ip = false
+  }
+}
