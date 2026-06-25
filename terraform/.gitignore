@@ -1,0 +1,14 @@
+# Local terraform dependency cache
+.terraform/
+
+# Ignore state files (they contain highly sensitive cloud maps)
+*.tfstate
+*.tfstate.*
+
+# Ignore variables that might contain passwords
+*.tfvars
+*.tfvars.json
+
+# Ignore local override files
+override.tf
+override.tf.json
